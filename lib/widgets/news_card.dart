@@ -1,33 +1,67 @@
 import 'package:flutter/material.dart';
 import 'package:football_news/screens/newslist_form.dart';
 import 'package:football_news/screens/menu.dart'; // Needed for ItemHomepage type
+import 'package:football_news/screens/news_entry_list.dart';
+
+// added for auth/logout
+import 'package:football_news/screens/login.dart';
+import 'package:pbp_django_auth/pbp_django_auth.dart';
+import 'package:provider/provider.dart';
 
 class ItemCard extends StatelessWidget {
-  final ItemHomepage item; 
-  
-  const ItemCard(this.item, {super.key}); 
+  final ItemHomepage item;
+
+  const ItemCard(this.item, {super.key});
 
   @override
   Widget build(BuildContext context) {
+    // provide CookieRequest to handle logout
+    final request = context.watch<CookieRequest>();
+
     return Material(
       color: Theme.of(context).colorScheme.secondary,
       borderRadius: BorderRadius.circular(12),
-      
       child: InkWell(
-        onTap: () {
+        // make async so we can await logout
+        onTap: () async {
           ScaffoldMessenger.of(context)
             ..hideCurrentSnackBar()
             ..showSnackBar(
-              SnackBar(content: Text("Kamu telah menekan tombol ${item.name}!"))
+              SnackBar(content: Text("Kamu telah menekan tombol ${item.name}!")),
             );
-            if (item.name == "Add News") {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const NewsFormPage()),
-              );
+
+          if (item.name == "Add News") {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const NewsFormPage()),
+            );
+          } else if (item.name == "See Football News") {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const NewsEntryListPage()),
+            );
+          } else if (item.name == "Logout") {
+            // Use localhost for Chrome; switch to http://10.0.2.2:8000/ for Android emulator
+            final response = await request.logout("http://localhost:8000/auth/logout/");
+            final String message = response["message"] ?? "Logout status unknown.";
+            if (context.mounted) {
+              if (response['status'] == true) {
+                final String uname = response["username"] ?? "";
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text("$message See you again, $uname.")),
+                );
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(builder: (context) => const LoginPage()),
+                );
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text(message)),
+                );
+              }
+            }
           }
         },
-        // Container untuk menyimpan Icon dan Text
         child: Container(
           padding: const EdgeInsets.all(8),
           child: Center(
@@ -52,5 +86,4 @@ class ItemCard extends StatelessWidget {
       ),
     );
   }
-  
 }

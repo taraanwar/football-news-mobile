@@ -1,5 +1,9 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:football_news/widgets/left_drawer.dart';
+import 'package:provider/provider.dart';
+import 'package:pbp_django_auth/pbp_django_auth.dart';
+import 'package:football_news/screens/menu.dart';
 
 class NewsFormPage extends StatefulWidget {
   const NewsFormPage({super.key});
@@ -25,8 +29,18 @@ class _NewsFormPageState extends State<NewsFormPage> {
     'analysis',
   ];
 
+  bool _isValidUrl(String v) {
+    if (v.trim().isEmpty) return true; // optional
+    final uri = Uri.tryParse(v.trim());
+    return uri != null &&
+        (uri.scheme == 'http' || uri.scheme == 'https') &&
+        uri.host.isNotEmpty;
+  }
+
   @override
   Widget build(BuildContext context) {
+    final request = context.watch<CookieRequest>();
+
     return Scaffold(
       appBar: AppBar(
         title: const Center(child: Text('Add News Form')),
@@ -57,7 +71,7 @@ class _NewsFormPageState extends State<NewsFormPage> {
                     });
                   },
                   validator: (String? value) {
-                    if (value == null || value.isEmpty) {
+                    if (value == null || value.trim().isEmpty) {
                       return "Title cannot be empty!";
                     }
                     return null;
@@ -83,7 +97,7 @@ class _NewsFormPageState extends State<NewsFormPage> {
                     });
                   },
                   validator: (String? value) {
-                    if (value == null || value.isEmpty) {
+                    if (value == null || value.trim().isEmpty) {
                       return "Content cannot be empty!";
                     }
                     return null;
@@ -101,7 +115,7 @@ class _NewsFormPageState extends State<NewsFormPage> {
                       borderRadius: BorderRadius.circular(5.0),
                     ),
                   ),
-                  initialValue: _category,
+                  value: _category,
                   items: _categories
                       .map((cat) => DropdownMenuItem(
                             value: cat,
@@ -117,7 +131,7 @@ class _NewsFormPageState extends State<NewsFormPage> {
                 ),
               ),
 
-              // === Thumbnail URL ===
+              // === Thumbnail URL (optional) ===
               Padding(
                 padding: const EdgeInsets.all(8.0),
                 child: TextFormField(
@@ -132,6 +146,13 @@ class _NewsFormPageState extends State<NewsFormPage> {
                     setState(() {
                       _thumbnail = value ?? "";
                     });
+                  },
+                  validator: (String? value) {
+                    if (value == null) return null;
+                    if (!_isValidUrl(value)) {
+                      return "Enter a valid http/https URL or leave it empty.";
+                    }
+                    return null;
                   },
                 ),
               ),
@@ -158,41 +179,44 @@ class _NewsFormPageState extends State<NewsFormPage> {
                   child: ElevatedButton(
                     style: ButtonStyle(
                       backgroundColor:
-                          WidgetStateProperty.all(Colors.indigo),
+                          MaterialStateProperty.all(Colors.indigo),
                     ),
-                    onPressed: () {
+                    onPressed: () async {
                       if (_formKey.currentState!.validate()) {
-                        showDialog(
-                          context: context,
-                          builder: (context) {
-                            return AlertDialog(
-                              title:
-                                  const Text('News saved successfully!'),
-                              content: SingleChildScrollView(
-                                child: Column(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.start,
-                                  children: [
-                                    Text('Title: $_title'),
-                                    Text('Content: $_content'),
-                                    Text('Category: $_category'),
-                                    Text('Thumbnail: $_thumbnail'),
-                                    Text(
-                                        'Featured: ${_isFeatured ? "Yes" : "No"}'),
-                                  ],
-                                ),
-                              ),
-                              actions: [
-                                TextButton(
-                                  child: const Text('OK'),
-                                  onPressed: () {
-                                    Navigator.pop(context);
-                                  },
-                                ),
-                              ],
-                            );
-                          },
+                        final resp = await request.postJson(
+                          // Use http://10.0.2.2:8000 if testing on Android emulator
+                          "http://localhost:8000/create-flutter/",
+                          jsonEncode({
+                            "title": _title,
+                            "content": _content,
+                            "thumbnail": _thumbnail,
+                            "category": _category,
+                            "is_featured": _isFeatured,
+                          }),
                         );
+
+                        if (!mounted) return;
+
+                        if (resp['status'] == 'success') {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                                content: Text("News successfully saved!")),
+                          );
+                          Navigator.pushReplacement(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => MyHomePage(),
+                            ),
+                          );
+                        } else {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                "Something went wrong, please try again.",
+                              ),
+                            ),
+                          );
+                        }
                       }
                     },
                     child: const Text(
